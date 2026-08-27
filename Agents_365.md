@@ -1,6 +1,6 @@
 # Microsoft Agent 365 Custom Agent Registration and Governance Guidance
 
-Last validated: 2026-05-26
+Last validated: 2026-08-27
 
 This document gives general technical guidance for registering, governing, and operating custom-built agents with Microsoft Agent 365. It applies to agents built with frameworks and platforms such as LangGraph, LangChain, Microsoft Agent Framework, Microsoft 365 Agents SDK, OpenAI Agents SDK, Microsoft Foundry, and custom in-house runtimes.
 
@@ -46,7 +46,54 @@ For self-hosted or externally hosted custom agents, use the Agent 365 SDK and CL
 
 The Agent 365 SDK does not create or host the agent. It layers enterprise capabilities on top of the existing agent implementation.
 
+### What SDK integration means
+
+For a custom agent, the implementation remains a three-layer stack:
+
+1. The chosen LLM orchestrator and runtime, such as LangGraph or Microsoft Agent Framework.
+2. The agent's prompts, workflows, tools, and application code.
+3. Agent 365 enterprise capabilities, such as identity, registration, observability, notifications, and governed tooling.
+
+Adding Agent 365 is therefore an augmentation rather than a runtime rewrite. Each enterprise capability is still a deliberate integration step, however, and most steps must be completed and validated for each agent.
+
+Identity and registration are separate from observability. Registration creates an inventory record and governed identity, but it does not emit invocation, model, tool, error, or output activity. As a result, registration alone does not populate behavioral monitoring or reporting. Defender and Purview features that depend on runtime activity also require appropriately instrumented telemetry. Identity-, inventory-, and policy-based controls can apply before observability is added, but they do not replace it.
+
+## Developer Effort and Sizing Model
+
+Estimate custom-agent onboarding as a set of capability tiers rather than a single registration task.
+
+| Tier | Work package | Primary owner | What it unlocks | Main implementation work |
+| --- | --- | --- | --- | --- |
+| 0 | Tenant enablement and CLI bootstrap | Global Administrator and platform team | Access to downstream Agent 365 setup | Confirm licensing and tenant enablement, install the CLI prerequisites, create the Agent 365 CLI enterprise application, and grant required admin consent. This is generally a one-time tenant activity. |
+| 1 | Identity and registration blueprint | Agent developer with identity/admin support | Registry presence, Microsoft Entra Agent ID, and a target for governance and Conditional Access | Create the blueprint, select OBO/S2S identity modes, request least-privilege permissions and consent, then package and publish the agent. This is per agent. |
+| 2 | Observability | Agent developer with operations/security support | Activity data for monitoring, reporting, and activity-dependent security/compliance investigation | Add the SDK or OpenTelemetry integration, acquire scoped tokens, instrument agent/model/tool/output/error paths, propagate trace context, control sensitive data, export traces, and validate ingestion. This is per agent and runtime. |
+| 3 | Governed tools and Work IQ, when required | Agent developer and administrator | Governed Microsoft 365 or business-tool access through MCP | Configure tool manifests, authentication, permissions, consent, SDK adapters, and tool-call validation. This is capability-dependent. |
+| 4 | Operational governance | Agent owner, platform, security, and compliance teams | Production policy, risk management, and lifecycle controls | Pilot the agent, apply access and security policies, validate Defender/Purview behavior, define support and retention, and test blocking and retirement. |
+
+The practical sizing boundary for "integrate the SDK and add observability" is normally tiers 1 and 2, with tier 0 as a prerequisite and tiers 3 and 4 added according to scope. A registration-only estimate covers inventory and identity, not a monitored production integration.
+
+Separate the estimate into:
+
+- One-time per tenant: enablement, CLI application consent, baseline roles, and governance standards.
+- Reusable per framework or hosting pattern: shared authentication, instrumentation wrappers, deployment configuration, telemetry conventions, and validation procedures.
+- Per agent: blueprint and permissions, package and publication, instrumentation coverage, privacy review, end-to-end ingestion tests, and operational handover.
+
+Observability usually drives the most variation. Auto-instrumentation for a supported framework reduces code changes, while custom runtimes, direct OTLP export, multiple model/tool providers, sub-agents, asynchronous jobs, and mixed OBO/S2S flows require more manual instrumentation and testing. Other sizing drivers include the number of environments, network egress constraints, permission-consent lead time, telemetry redaction requirements, and the number of distinct invocation, tool, and failure paths.
+
 ## Recommended Custom Agent Onboarding Flow
+
+### 0. Enable the tenant and install the CLI
+
+Agent 365 licensing and tenant enablement are separate gates: a licensed tenant is not automatically enabled. A Global Administrator must complete the tenant requirement setup before downstream registration and integration can proceed.
+
+The Agent 365 CLI is a .NET global tool and requires .NET 8 or later on the workstation, even when the agent itself is implemented in Python or Node.js.
+
+```bash
+dotnet tool install --global Microsoft.Agents.A365.DevTools.Cli
+a365 setup requirements
+```
+
+The requirements command creates the `Agent 365 CLI` enterprise application and obtains admin consent for the required Microsoft Graph scopes. Treat this as tenant bootstrap work rather than recurring per-agent development.
 
 ### 1. Classify the agent
 
@@ -639,6 +686,7 @@ Use this checklist before broad deployment.
 - https://learn.microsoft.com/en-us/microsoft-agent-365/overview
 - https://learn.microsoft.com/en-us/microsoft-agent-365/connect-existing-agents
 - https://learn.microsoft.com/en-us/microsoft-agent-365/developer/get-started
+- https://learn.microsoft.com/en-us/microsoft-agent-365/developer/reference/cli/
 - https://learn.microsoft.com/en-us/microsoft-agent-365/developer/registration
 - https://learn.microsoft.com/en-us/microsoft-agent-365/developer/publish
 - https://learn.microsoft.com/en-us/microsoft-agent-365/developer/observability
